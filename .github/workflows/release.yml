@@ -1,0 +1,98 @@
+name: Go CI/CD Release
+
+# Trigger: Wann soll dieser Workflow ausgeführt werden?
+on:
+  # Bei jedem Push auf den 'main'-Branch
+  push:
+    branches: [ "main" ]
+    tags:
+      - 'v*.*.*'
+  # Bei jedem Pull Request, der auf den 'main'-Branch zielt
+  pull_request:
+    branches: [ "main" ]
+  # Bei jedem neuen Tag, der mit 'v' beginnt (z.B. v1.0.0, v1.2.3)
+
+# Dies gilt für alle Jobs, es sei denn, sie überschreiben es.
+permissions:
+  contents: read
+
+jobs:
+  # Job 1: Testen und Linten
+  test:
+    name: Test and Lint
+    # Wir verwenden die neueste Ubuntu-Version, die von GitHub bereitgestellt wird.
+    runs-on: ubuntu-latest
+
+    # Services: Hier starten wir eine temporäre Datenbank nur für diesen Job.
+    # services:
+
+    # Steps: Die einzelnen Befehle, die im Job ausgeführt werden.
+    steps:
+      # Schritt 1: Den Code aus deinem Repository auschecken.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Schritt 2: Die Go-Umgebung aufsetzen.
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable # Spezifiziere deine Go-Version
+
+      # Schritt 3: Linter ausführen (optional, aber sehr empfohlen)
+      - name: Run Linter
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1
+
+      # Schritt 4: Auf bekannte Sicherheitslücken prüfen (optional, aber empfohlen)
+      - name: Run Vulnerability Check
+        uses: golang/govulncheck-action@v1
+      
+      # # Schritt 5: Integrationstests ausführen
+      # - name: Run Integration Tests
+      #   # WICHTIG: Wir setzen hier die Umgebungsvariable für den Test.
+      #   # Der Host ist 'postgres', weil das der Name des Service-Containers ist.
+      #   # Die Anmeldedaten müssen mit denen aus dem Service oben übereinstimmen.
+      #   env:
+      #     TEST_DATABASE_URL: "postgres://myuser:mypassword@localhost:5432/easyinvoice_test?sslmode=disable"
+      #   run: go test -v -race ./...
+
+
+  # Job 2: Kompilieren und ein Release erstellen
+  release:
+    name: Build and Release
+    # Dieser Job läuft nur, wenn der 'test'-Job erfolgreich war.
+    needs: test
+    # Wir führen diesen Job nur aus, wenn der Trigger ein Tag-Push war.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      # Schritt 3: Anwendung für Linux kompilieren.
+      - name: Build Go application
+        # GOOS/GOARCH sorgen für ein Linux-Binary.
+        # -ldflags="-s -w" macht das Binary kleiner.
+        # Wir nennen die Ausgabedatei 'easyinvoice-linux-amd64'.
+        run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ./easyinvoice-linux-amd64 ./cmd/api
+
+      # Schritt 4: GitHub Release erstellen und das Binary hochladen.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Der Name des Releases wird automatisch der Name des Tags (z.B. "v1.0.1")
+          tag_name: ${{ github.ref_name }}
+          # Der Name der Release-Seite wird ebenfalls der Tag-Name.
+          name: Release ${{ github.ref_name }}
+          # Wir hängen das kompilierte Binary als Datei an das Release an.
+          files: |
+            ./easyinvoice-linux-amd64

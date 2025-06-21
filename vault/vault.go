@@ -32,7 +32,9 @@ func loadIdentity() (age.Identity, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() {
+		err = errors.Join(err, f.Close())
+	}()
 
 	identities, err := age.ParseIdentities(f)
 	if err != nil {
@@ -50,7 +52,10 @@ func loadRecipient() (age.Recipient, error) {
 		fmt.Println("open recipientpath", err)
 		return nil, err
 	}
-	defer f.Close()
+	
+	defer func() {
+		err = errors.Join(err, f.Close())
+	}()
 
 	recipients, err := age.ParseRecipients(f)
 	if err != nil {
@@ -58,7 +63,7 @@ func loadRecipient() (age.Recipient, error) {
 		return nil, err
 	}
 	if len(recipients) == 0 {
-		return nil, errors.New("No recipients found in key file")
+		return nil, errors.New("no recipients found in key file")
 	}
 	return recipients[0], nil
 }
@@ -73,7 +78,10 @@ func LoadVault() (map[string]string, error) {
 	if os.IsNotExist(err) {
 		return make(map[string]string), nil
 	}
-	defer f.Close()
+		
+	defer func() {
+		err = errors.Join(err, f.Close())
+	}()
 
 	r, err := age.Decrypt(f, identity)
 	if err != nil {
