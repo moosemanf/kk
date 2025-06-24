@@ -72,6 +72,6 @@ var pickCmd = &cobra.Command{
 }
 
 func init() {
-	pickCmd.Flags().BoolVarP(&clip, "clip", "c", false, "Copy value to clipboard")
+	pickCmd.Flags().BoolVarP(&clip, "clip", "c", true, "Copy value to clipboard")
 	rootCmd.AddCommand(pickCmd)
 }
